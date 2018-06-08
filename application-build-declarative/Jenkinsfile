@@ -1,0 +1,207 @@
+#!groovy
+import groovy.transform.Field
+import hudson.model.*
+
+
+def USERNAME_BPER
+def PASSWORD_BPER
+def GIT_PROJECT
+def AMBIENTE
+def RUNNING_USER
+
+
+def getRealVersion(maven_metadata) {
+    def mavenMetadata = new File(maven_metadata).getText()
+    def xmlSlurper = new XmlSlurper().parseText(mavenMetadata)
+    def realVersion = xmlSlurper.versioning.snapshotVersions.snapshotVersion[0].value.text()
+    return realVersion
+}
+
+
+pipeline {
+
+    parameters {
+        string(name: 'APPLICATION_NAME', description: 'Identificativo dell&apos;applicazione. Deve rispecchiare il label utilizzato nella creazione dell&apos;applicazione.')
+        credentialsParam('LDAP_CREDENTIAL') {
+            description('Credenziali LDAP, registrarle a scope Global per permettere alle pipeline generate di mantenerle.' +
+                    'Verranno usate per l\'accesso all\'artifactory.')
+            required(true)
+            type('any')
+        }
+        string(name: 'ARTIFACT_VERSION', description: 'Versione del war che si desidera rilasciare')
+        choice(name: 'ARTIFACT_TYPE', choices: 'SNAPSHOT\nRELEASE', description: 'tipologia artefatto: SNAPSHOT, RELEASE')
+        string(name: 'ARTIFACTORY_REPOSITORY', description: 'artifactory dalla quale recuperare l\'arteffato')
+        string(name: 'GROUP_ID', description: '')
+        string(name: 'ARTIFACT_ID', description: '')
+        string(name: 'ARTIFACTORY_URL', description: '')
+        string(name: 'CONFIG_FILE', description: '')
+        string(name: 'MODULES_FOLDER', description: '')
+        choice(name: 'MIDDLEWARE', choices: 'SNAPSHOT\nRELEASE', description: 'tipologia artefatto: SNAPSHOT, RELEASE')
+    }
+
+    agent {
+        node {
+            label('master')
+        }
+    }
+
+    environment {
+        PATH = '/opt/maven/apache-maven-3.3.9/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin'
+    }
+
+    stages {
+        stage('INIT') {
+            steps {
+                script {
+                    sh 'rm -f *war'
+                    sh "rm -rf ${env.WORKSPACE}/deployment"
+                    sh 'rm -f maven-metadata.xml maven-metadata-version.xml'
+                }
+            }
+        }
+        stage('CHECK PARAMETERS') {
+            steps {
+                script {
+
+                    if ((groupId == null) || groupId.isEmpty()) {
+                        error 'Il parametro groupId è null o non è valorizzato!'
+                    }
+                    if ((artifactId == null) || artifactId.isEmpty()) {
+                        error 'Il parametro artifactId è null o non è valorizzato!'
+                    }
+                    if ((artifactVersion == null) || artifactVersion.isEmpty()) {
+                        error 'Il parametro artifactVersion è null o non è valorizzato!'
+                    }
+                    if ((repositoryArtifactory == null) || repositoryArtifactory.isEmpty()) {
+                        error 'Il parametro artifactVersion è null o non è valorizzato!'
+                    }
+                    if ((artifactoryUrl == null) || artifactoryUrl.isEmpty()) {
+                        error 'Il parametro artifactoryUrl è null o non è valorizzato!'
+                    }
+                    if ((ldapCredentials == null) || ldapCredentials.isEmpty()) {
+                        error 'Il parametro ldapCredentials è null o non è valorizzato!'
+                    }
+                    if (artifactoryUrl.endsWith("/")) {
+                        artifactoryUrl = artifactoryUrl.substring(0, artifactoryUrl.size() - 1)
+                    }
+                    groupId = groupId.replace('.', '/')
+
+                }
+            }
+        }
+        stage('DOWNLOAD CONFIGURATION') {
+            steps {
+                script {
+
+                    checkout([$class      : 'GitSCM', branches: [[name: gitBranch]], doGenerateSubmoduleConfigurations: false, extensions: [],
+                              submoduleCfg: [], userRemoteConfigs: [[url: gitUrl]]])
+                }
+            }
+        }
+        stage('DOWNLOAD LATEST ARTIFACT') {
+            steps {
+                script {
+                    def server = Artifactory.newServer url: artifactoryUrl, credentialsId: ldapCredentials
+                    def downloadWar
+                    if ("SNAPSHOT".equals(repositoryType)) {
+                        def downloadSpec = """{
+                            "files": [
+                            {
+                              "pattern": "$repositoryArtifactory/$groupId/$artifactId/$artifactVersion/maven-metadata.xml",
+                              "target": "./"
+                            }
+                                     ]
+                            }"""
+                        server.download(downloadSpec);
+
+                        def buildValue = getRealVersion "${env.WORKSPACE}/$groupId/$artifactId/$artifactVersion/maven-metadata.xml"
+                        def FILE_PATH = repositoryArtifactory + '/' + groupId + '/' + artifactId + '/' + artifactVersion + '/' + artifactId + '-' + buildValue + '.war'
+                        downloadWar = """{
+                            "files": [
+                            {
+                              "pattern": "$FILE_PATH",
+                              "target": "./"
+                            }
+                                     ]
+                            }"""
+                    } else {
+                        def FILE_PATH = repositoryArtifactory + '/' + groupId + '/' + artifactId + '/' + artifactVersion + '/' + artifactId + '-' + artifactVersion + '.war'
+                        downloadWar = """{
+                            "files": [
+                            {
+                              "pattern": "$FILE_PATH",
+                              "target": "./"
+                            }
+                                     ]
+                            }"""
+                    }
+                    server.download(downloadWar);
+                }
+            }
+        }
+        stage('REDEPLOY') {
+            steps {
+                script {
+                    sh 'rm -f maven-metadata.xml maven-metadata-version.xml'
+
+                    sh "mkdir -p ${env.WORKSPACE}/deployment/configuration/"
+                    sh "mv ${env.WORKSPACE}/$groupId/$artifactId/$artifactVersion/*.war ${env.WORKSPACE}/deployment/"
+
+                    if ('jboss'.equals(middleware)) {
+
+                        if (!"NONE".equals(modules)) {
+                            if (fileExists(modules)) {
+                                sh "mkdir -p ${env.WORKSPACE}/deployment/modules/"
+                                sh "cp -r ${modules} ${env.WORKSPACE}/deployment/modules"
+                            } else {
+                                error 'Non è stata trovata nessuna cartella associata al path MODULES=${modules}'
+                            }
+                        }
+
+                        if ("NONE".equals(config_path)) {
+                            config_path = "standalone-openshift.xml"
+                        }
+
+                        config_path = 'standalone/' + config_path
+
+                        if (fileExists(config_path)) {
+                            sh "mv ${config_path} ./standalone-openshift.xml"
+                            sh "cp standalone-openshift.xml ${env.WORKSPACE}/deployment/configuration/"
+                        } else {
+                            error 'Non è stata trovata nessuna cartella associata al path STANDALONE=${standalone}'
+                        }
+                    } else {
+                        // Tomcat
+
+                        sh "mkdir -p ${env.WORKSPACE}/deployment/lib/"
+                        sh "mkdir -p ${env.WORKSPACE}/deployment/bin/"
+
+                        // necessari all'utilizzo di tomcat-vault
+
+                        sh "mv lib/tomcat-vault/tomcat-vault.jar ${env.WORKSPACE}/deployment/lib/"
+                        sh "mv server/catalina.properties ${env.WORKSPACE}/deployment/configuration/"
+                        sh "mv bin/ ${env.WORKSPACE}/deployment/"
+                        sh "mv scripts/common.sh ${env.WORKSPACE}/deployment/"
+
+                        if (!"NONE".equals(modules)) {
+                            if (fileExists(modules)) {
+                                sh "cp -r ${modules} ${env.WORKSPACE}/deployment/lib"
+                            } else {
+                                error 'Non è stata trovata nessuna cartella associata al path LIB=${modules}'
+                            }
+                        }
+                        if (!"NONE".equals(config_path)) {
+                            config_path = 'server/' + config_path
+                            if (fileExists(config_path)) {
+                                sh "mv ${config_path} ./server.xml"
+                                sh "cp server.xml ${env.WORKSPACE}/deployment/configuration/"
+                            }
+                        }
+                    }
+                    sh "oc start-build ${env.JOB_NAME} --from-dir=${env.WORKSPACE}/deployment/"
+                }
+            }
+        }
+
+    }
+}
