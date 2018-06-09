@@ -22,12 +22,7 @@ pipeline {
 
     parameters {
         string(name: 'APPLICATION_NAME', description: 'Identificativo dell&apos;applicazione. Deve rispecchiare il label utilizzato nella creazione dell&apos;applicazione.')
-        credentialsParam('LDAP_CREDENTIAL') {
-            description('Credenziali LDAP, registrarle a scope Global per permettere alle pipeline generate di mantenerle.' +
-                    'Verranno usate per l\'accesso all\'artifactory.')
-            required(true)
-            type('any')
-        }
+        credentials(name: 'LDAP_CREDENTIAL', description: 'Credenziali LDAP, registrarle a scope Global per permettere alle pipeline generate di mantenerle.', defaultValue: '', credentialType: "any", required: true)
         string(name: 'ARTIFACT_VERSION', description: 'Versione del war che si desidera rilasciare')
         choice(name: 'ARTIFACT_TYPE', choices: 'SNAPSHOT\nRELEASE', description: 'tipologia artefatto: SNAPSHOT, RELEASE')
         string(name: 'ARTIFACTORY_REPOSITORY', description: 'artifactory dalla quale recuperare l\'arteffato')
