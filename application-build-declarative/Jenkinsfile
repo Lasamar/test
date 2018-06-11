@@ -16,6 +16,9 @@ def configFile
 def modulesFolder
 def middleware
 
+def gitUrl = 'http://172.16.63.237/infrastructure/openshift-middleware-configuration.git'
+def gitBranch = 'master'
+
 def getRealVersion(maven_metadata) {
     def mavenMetadata = new File(maven_metadata).getText()
     def xmlSlurper = new XmlSlurper().parseText(mavenMetadata)
