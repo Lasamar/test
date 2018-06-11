@@ -3,11 +3,18 @@ import groovy.transform.Field
 import hudson.model.*
 
 
-def USERNAME_BPER
-def PASSWORD_BPER
-def GIT_PROJECT
-def AMBIENTE
-def RUNNING_USER
+def applicationName
+def ldapCredentials
+def artifactType
+
+def repositoryArtifactory
+def groupId
+def artifactId
+def artifactVersion
+def artifactoryUrl
+def configFile
+def modulesFolder
+def middleware
 
 
 def getRealVersion(maven_metadata) {
@@ -40,10 +47,6 @@ pipeline {
         }
     }
 
-    environment {
-        PATH = '/opt/maven/apache-maven-3.3.9/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin'
-    }
-
     stages {
         stage('INIT') {
             steps {
@@ -58,32 +61,61 @@ pipeline {
             steps {
                 script {
 
-                    if ((groupId == null) || groupId.isEmpty()) {
-                        error 'Il parametro groupId è null o non è valorizzato!'
+                    if ((env.GROUP_ID == null) || env.GROUP_ID.isEmpty()) {
+                        error 'Il parametro GROUP_ID è null o non è valorizzato!'
+                    } else {
+                        groupId = env.GROUP_ID.replaceAll("\\s", "")
                     }
-                    if ((artifactId == null) || artifactId.isEmpty()) {
-                        error 'Il parametro artifactId è null o non è valorizzato!'
+                    if ((env.ARTIFACT_ID == null) || env.ARTIFACT_ID.isEmpty()) {
+                        error 'Il parametro ARTIFACT_ID è null o non è valorizzato!'
+                    } else {
+                        artifactId = env.ARTIFACT_ID.replaceAll("\\s", "")
                     }
-                    if ((artifactVersion == null) || artifactVersion.isEmpty()) {
-                        error 'Il parametro artifactVersion è null o non è valorizzato!'
+                    if ((env.ARTIFACT_VERSION == null) || env.ARTIFACT_VERSION.isEmpty()) {
+                        error 'Il parametro ARTIFACT_VERSION è null o non è valorizzato!'
+                    } else {
+                        artifactVersion = env.ARTIFACT_VERSION.replaceAll("\\s", "")
                     }
-                    if ((repositoryArtifactory == null) || repositoryArtifactory.isEmpty()) {
-                        error 'Il parametro artifactVersion è null o non è valorizzato!'
+                    if ((env.ARTIFACTORY_REPOSITORY == null) || env.ARTIFACTORY_REPOSITORY.isEmpty()) {
+                        error 'Il parametro ARTIFACTORY_REPOSITORY è null o non è valorizzato!'
+                    } else {
+                        repositoryArtifactory = env.ARTIFACTORY_REPOSITORY.replaceAll("\\s", "")
                     }
-                    if ((artifactoryUrl == null) || artifactoryUrl.isEmpty()) {
-                        error 'Il parametro artifactoryUrl è null o non è valorizzato!'
+                    if ((env.ARTIFACTORY_URL == null) || env.ARTIFACTORY_URL.isEmpty()) {
+                        error 'Il parametro ARTIFACTORY_URL è null o non è valorizzato!'
+                    } else {
+                        artifactoryUrl = env.ARTIFACTORY_URL.replaceAll("\\s", "")
                     }
-                    if ((ldapCredentials == null) || ldapCredentials.isEmpty()) {
-                        error 'Il parametro ldapCredentials è null o non è valorizzato!'
+                    if ((env.LDAP_CREDENTIAL == null) || env.LDAP_CREDENTIAL.isEmpty()) {
+                        error 'Il parametro LDAP_CREDENTIAL è null o non è valorizzato!'
+                    } else {
+                        ldapCredentials = env.LDAP_CREDENTIAL
                     }
+                    if ((env.CONFIG_FILE == null) || env.CONFIG_FILE.isEmpty()) {
+                        error 'Il parametro CONFIG_FILE è null o non è valorizzato!'
+                    } else {
+                        configFile = env.CONFIG_FILE
+                    }
+                    if ((env.MODULES_FOLDER == null) || env.MODULES_FOLDER.isEmpty()) {
+                        error 'Il parametro MODULES_FOLDER è null o non è valorizzato!'
+                    } else {
+                        modulesFolder = env.MODULES_FOLDER
+                    }
+                    if ((env.APPLICATION_NAME == null) || env.APPLICATION_NAME.isEmpty()) {
+                        error 'Il parametro APPLICATION_NAME è null o non è valorizzato!'
+                    } else {
+                        applicationName = env.APPLICATION_NAME.replaceAll("\\s", "")
+                    }
+
                     if (artifactoryUrl.endsWith("/")) {
                         artifactoryUrl = artifactoryUrl.substring(0, artifactoryUrl.size() - 1)
                     }
                     groupId = groupId.replace('.', '/')
+                    artifactType = env.ARTIFACT_TYPE
 
                 }
             }
-        }
+        } repositoryType
         stage('DOWNLOAD CONFIGURATION') {
             steps {
                 script {
@@ -98,7 +130,7 @@ pipeline {
                 script {
                     def server = Artifactory.newServer url: artifactoryUrl, credentialsId: ldapCredentials
                     def downloadWar
-                    if ("SNAPSHOT".equals(repositoryType)) {
+                    if ("SNAPSHOT".equals(artifactType)) {
                         def downloadSpec = """{
                             "files": [
                             {
@@ -142,28 +174,28 @@ pipeline {
                     sh "mkdir -p ${env.WORKSPACE}/deployment/configuration/"
                     sh "mv ${env.WORKSPACE}/$groupId/$artifactId/$artifactVersion/*.war ${env.WORKSPACE}/deployment/"
 
-                    if ('jboss'.equals(middleware)) {
+                    if ('jboss'.equals(${env.MIDDLEWARE})) {
 
-                        if (!"NONE".equals(modules)) {
-                            if (fileExists(modules)) {
+                        if (!"NONE".equals(modulesFolder)) {
+                            if (fileExists(modulesFolder)) {
                                 sh "mkdir -p ${env.WORKSPACE}/deployment/modules/"
-                                sh "cp -r ${modules} ${env.WORKSPACE}/deployment/modules"
+                                sh "cp -r ${modulesFolder} ${env.WORKSPACE}/deployment/modules"
                             } else {
-                                error 'Non è stata trovata nessuna cartella associata al path MODULES=${modules}'
+                                error 'Non è stata trovata nessuna cartella associata al path MODULES=${modulesFolder}'
                             }
                         }
 
-                        if ("NONE".equals(config_path)) {
-                            config_path = "standalone-openshift.xml"
+                        if ("NONE".equals(configFile)) {
+                            configFile = "standalone-openshift.xml"
                         }
 
-                        config_path = 'standalone/' + config_path
+                        configFile = 'standalone/' + configFile
 
-                        if (fileExists(config_path)) {
-                            sh "mv ${config_path} ./standalone-openshift.xml"
+                        if (fileExists(configFile)) {
+                            sh "mv ${configFile} ./standalone-openshift.xml"
                             sh "cp standalone-openshift.xml ${env.WORKSPACE}/deployment/configuration/"
                         } else {
-                            error 'Non è stata trovata nessuna cartella associata al path STANDALONE=${standalone}'
+                            error 'Non è stata trovata nessuna cartella associata al path STANDALONE=${configFile}'
                         }
                     } else {
                         // Tomcat
@@ -178,22 +210,22 @@ pipeline {
                         sh "mv bin/ ${env.WORKSPACE}/deployment/"
                         sh "mv scripts/common.sh ${env.WORKSPACE}/deployment/"
 
-                        if (!"NONE".equals(modules)) {
-                            if (fileExists(modules)) {
-                                sh "cp -r ${modules} ${env.WORKSPACE}/deployment/lib"
+                        if (!"NONE".equals(modulesFolder)) {
+                            if (fileExists(modulesFolder)) {
+                                sh "cp -r ${modulesFolder} ${env.WORKSPACE}/deployment/lib"
                             } else {
-                                error 'Non è stata trovata nessuna cartella associata al path LIB=${modules}'
+                                error 'Non è stata trovata nessuna cartella associata al path LIB=${modulesFolder}'
                             }
                         }
-                        if (!"NONE".equals(config_path)) {
-                            config_path = 'server/' + config_path
-                            if (fileExists(config_path)) {
-                                sh "mv ${config_path} ./server.xml"
+                        if (!"NONE".equals(configFile)) {
+                            config_path = 'server/' + configFile
+                            if (fileExists(configFile)) {
+                                sh "mv ${configFile} ./server.xml"
                                 sh "cp server.xml ${env.WORKSPACE}/deployment/configuration/"
                             }
                         }
                     }
-                    sh "oc start-build ${env.JOB_NAME} --from-dir=${env.WORKSPACE}/deployment/"
+                    sh "oc start-build ${applicationName} --from-dir=${env.WORKSPACE}/deployment/"
                 }
             }
         }
