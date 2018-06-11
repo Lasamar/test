@@ -115,7 +115,7 @@ pipeline {
 
                 }
             }
-        } repositoryType
+        }
         stage('DOWNLOAD CONFIGURATION') {
             steps {
                 script {
