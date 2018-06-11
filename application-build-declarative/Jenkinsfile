@@ -37,7 +37,7 @@ pipeline {
         string(name: 'ARTIFACTORY_URL', description: '')
         string(name: 'CONFIG_FILE', description: '')
         string(name: 'MODULES_FOLDER', description: '')
-        choice(name: 'MIDDLEWARE', choices: 'SNAPSHOT\nRELEASE', description: 'tipologia artefatto: SNAPSHOT, RELEASE')
+        choice(name: 'MIDDLEWARE', choices: 'Jboss\ntomcat', description: 'tipologia middleware: jboss, Tomcat')
     }
 
     agent {
