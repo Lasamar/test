@@ -14,7 +14,6 @@ def artifactVersion
 def artifactoryUrl
 def configFile
 def modulesFolder
-def middleware
 
 
 def getRealVersion(maven_metadata) {
