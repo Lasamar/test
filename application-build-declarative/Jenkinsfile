@@ -14,7 +14,7 @@ def artifactVersion
 def artifactoryUrl
 def configFile
 def modulesFolder
-
+def middleware
 
 def getRealVersion(maven_metadata) {
     def mavenMetadata = new File(maven_metadata).getText()
@@ -105,6 +105,7 @@ pipeline {
                     } else {
                         applicationName = env.APPLICATION_NAME.replaceAll("\\s", "")
                     }
+                    middleware = env.MIDDLEWARE
 
                     if (artifactoryUrl.endsWith("/")) {
                         artifactoryUrl = artifactoryUrl.substring(0, artifactoryUrl.size() - 1)
@@ -173,7 +174,7 @@ pipeline {
                     sh "mkdir -p ${env.WORKSPACE}/deployment/configuration/"
                     sh "mv ${env.WORKSPACE}/$groupId/$artifactId/$artifactVersion/*.war ${env.WORKSPACE}/deployment/"
 
-                    if ('jboss'.equals(${env.MIDDLEWARE})) {
+                    if ('jboss'.equals($middleware)) {
 
                         if (!"NONE".equals(modulesFolder)) {
                             if (fileExists(modulesFolder)) {
