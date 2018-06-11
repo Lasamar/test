@@ -177,7 +177,7 @@ pipeline {
                     sh "mkdir -p ${env.WORKSPACE}/deployment/configuration/"
                     sh "mv ${env.WORKSPACE}/$groupId/$artifactId/$artifactVersion/*.war ${env.WORKSPACE}/deployment/"
 
-                    if ('jboss'.equals($middleware)) {
+                    if ('jboss'.equals(middleware)) {
 
                         if (!"NONE".equals(modulesFolder)) {
                             if (fileExists(modulesFolder)) {
