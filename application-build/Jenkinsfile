@@ -111,13 +111,13 @@ node {
                 config_path = "standalone-openshift.xml"
             }
 
-            config_path = 'standalone/' + config_path
+            config_path = 'jboss/standalone/' + config_path
 
             if (fileExists(config_path)) {
                 sh "mv ${config_path} ./standalone-openshift.xml"
                 sh "cp standalone-openshift.xml ${env.WORKSPACE}/deployment/configuration/"
             } else {
-                error 'Non è stata trovata nessuna cartella associata al path STANDALONE=${standalone}'
+                error 'Non è stata trovata nessuna cartella associata al path STANDALONE=${config_path}'
             }
         } else {
             // Tomcat
@@ -140,7 +140,7 @@ node {
                 }
             }
             if (!"NONE".equals(config_path)) {
-                config_path = 'server/' + config_path
+                config_path = 'tomcat/server/' + config_path
                 if (fileExists(config_path)) {
                     sh "mv ${config_path} ./server.xml"
                     sh "cp server.xml ${env.WORKSPACE}/deployment/configuration/"
