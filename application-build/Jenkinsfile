@@ -1,6 +1,5 @@
 #!groovy
 
-//THIS IS A TESTTTTT
 def groupId = env.GROUP_ID as String
 def artifactId = env.ARTIFACT_ID as String
 def artifactoryUrl = env.ARTIFACTORY_URL as String
